@@ -22,6 +22,37 @@ MYSQL_CONFIG = {
 
 TABLE_NAME = 'lagou_position'
 
+FIANANCE_STAGE = {
+    u'\u672a\u878d\u8d44': '0',
+    u'\u5929\u4f7f\u8f6e': '1',
+    u'A\u8f6e': '2',
+    u'B\u8f6e': '3',
+    u'C\u8f6e': '4',
+    u'D\u8f6e\u53ca\u4ee5\u4e0a': '5',
+    u'\u4e0a\u5e02\u516c\u53f8': '6',
+    u'\u4e0d\u9700\u8981\u878d\u8d44': '7'
+}
+
+EDUCATION = {
+    u'\u4e0d\u9650': '0',
+    u'\u5927\u4e13': '1',
+    u'\u672c\u79d1': '2',
+    u'\u7855\u58eb': '3',
+    u'\u535a\u58eb': '4'
+}
+
+
+EXPERIENCE = {
+    u'\u7ecf\u9a8c\u4e0d\u9650': '0',
+    u'\u7ecf\u9a8c\u5e94\u5c4a\u6bd5\u4e1a\u751f': '1',
+    u'\u7ecf\u9a8c1\u5e74\u4ee5\u4e0b': '2',
+    u'\u7ecf\u9a8c1-3\u5e74': '3',
+    u'\u7ecf\u9a8c3-5\u5e74': '4',
+    u'\u7ecf\u9a8c5-10\u5e74': '5',
+    u'\u7ecf\u9a8c10\u5e74\u4ee5\u4e0a': '6'
+
+}
+
 
 class QuotesSpider(scrapy.Spider):
     name = "quotes"
@@ -224,7 +255,6 @@ class LagouSpider(scrapy.Spider):
                                           'x-requested-with': 'XMLHttpRequest'})
             """
 
-
     def parse_next(self, response):
         print response.request.headers
         print json.loads(response.body)
@@ -264,15 +294,15 @@ class LagouSeleniumSpider(scrapy.Spider):
         salary = response.css('span.money::text').extract()
         company = response.css('div.company_name a::text').extract()
         _financeStage = response.css('div.industry::text').extract()
-        financeStage = [i.strip().split('/')[1] for i in _financeStage]
+        financeStage = [FIANANCE_STAGE[i.strip().split('/')[1].strip()] for i in _financeStage]
         _experienceEducation = response.css('div.p_bot div.li_b_l::text').extract()
         experience = []
         education = []
         for e in _experienceEducation:
             if e.strip():
                 ee = e.strip().split('/')
-                experience.append(ee[0])
-                education.append(ee[1])
+                experience.append(EXPERIENCE[ee[0].strip()])
+                education.append(EDUCATION[ee[1].strip()])
         district = response.css('span.add em::text').extract()
         _companyId = response.css('div.company_name a::attr(href)').extract()
         companyId = [i.split('/')[-1].split('.')[0] for i in _companyId]
@@ -294,7 +324,9 @@ class LagouSeleniumSpider(scrapy.Spider):
         i = 0
         while i < page_size:
             #print company[i], salary[i], district[i], financeStage[i], experienceEducation[i]
-            _line = ','.join([positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i], education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou']) + '\n'
+            _line = ','.join([positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
+                              education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
+                             salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1]]) + '\n'
             print _line
             self.lines.append(_line.encode('utf-8'))
             i += 1
@@ -316,8 +348,13 @@ class LagouSeleniumSpider(scrapy.Spider):
                 print 'can not connect to mysql: %s' % e
             else:
                 cursor = conn.cursor()
+                # clear the data of the table at first.
+                _sql = """DELETE FROM {tb};"""
+                cursor.execute(_sql.format(tb=TABLE_NAME))
+                conn.commit()
+                # load new data into table.
                 _sql = """LOAD DATA INFILE "{file_name}" REPLACE INTO TABLE `{tb}` CHARACTER SET utf8 FIELDS TERMINATED BY ','
-                LINES TERMINATED BY '\n' (positionId, companyShortName, salaryLow, district, financeStage, experience, education, createTime, companyId, hrId, keyword, city);"""
+                LINES TERMINATED BY '\n' (positionId, companyShortName, salaryRange, district, financeStage, experience, education, createTime, companyId, hrId, keyword, city, salaryLow, salaryHigh);"""
                 print _sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME)
                 print self.file_name
                 cursor.execute(_sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME))
