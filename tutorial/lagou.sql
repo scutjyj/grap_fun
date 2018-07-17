@@ -1,0 +1,22 @@
+CREATE TABLE `lagou_position` (
+  `id` int(10) NOT NULL AUTO_INCREMENT,
+  `positionId` int(10) NOT NULL,
+  `companyShortName` varchar(255) NOT NULL,
+  `salaryRange` varchar(255) NOT NULL,
+  `district` varchar(255) NOT NULL,
+  `financeStage` tinyint(1) NOT NULL COMMENT '融资阶段，0为未融资，1为天使轮，2为A轮，3为B轮，4为C轮，5为D轮及以上，6为上市公司，7为不需要融资',
+  `experience` tinyint(1) NOT NULL COMMENT '工作经验：0为不要求，1为应届毕业生，2为三年及以下，3为三至五年， 4为五至十年，5为十年以上',
+  `education` tinyint(1) NOT NULL COMMENT '学历要求：0为不要求，1为大专，2为本科，3为硕士，4为博士',
+  `createTime` varchar(255) NOT NULL,
+  `createTimestamp` int(10) DEFAULT NULL,
+  `companyId` int(10) NOT NULL,
+  `hrId` int(10) NOT NULL,
+  `keyword` varchar(255) NOT NULL,
+  `city` varchar(255) NOT NULL,
+  `salaryLow` int(10) DEFAULT NULL,
+  `salaryHigh` int(10) DEFAULT NULL,
+  `description` text,
+  `location` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `u_positionId` (`positionId`)
+) ENGINE=InnoDB AUTO_INCREMENT=764 DEFAULT CHARSET=utf8;
