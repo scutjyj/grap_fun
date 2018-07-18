@@ -189,7 +189,7 @@ class SeleniumMiddleware(object):
                     raise
                 return HtmlResponse(url=spider.browser.current_url, body=spider.browser.page_source,
                                     encoding='utf-8', request=request)
-            else:
+            elif request.url[-1] != 'l':
                 """
                 try:
                     spider.browser.find_element_by_class_name('pager_next_disabled').click()
@@ -212,6 +212,16 @@ class SeleniumMiddleware(object):
                     time.sleep(3)
                 except:
                     print 'get page {page_number} failed...'.format(page_number=request.url.split('/')[-1])
+                    spider.close()
+                    raise
+                return HtmlResponse(url=spider.browser.current_url, body=spider.browser.page_source,
+                                    encoding='utf-8', request=request)
+            else:
+                try:
+                    spider.browser.get(request.url)
+                    time.sleep(0.5)
+                except:
+                    print 'get page {page_number} failed...'.format(page_number=request.url)
                     spider.close()
                     raise
                 return HtmlResponse(url=spider.browser.current_url, body=spider.browser.page_source,

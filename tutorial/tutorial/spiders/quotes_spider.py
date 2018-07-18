@@ -273,12 +273,65 @@ class LagouSeleniumSpider(scrapy.Spider):
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         self.file_name = os.path.join(os.getcwd(), '{kw}_{ts}.txt'.format(kw=self.POSITION_KEYWORD,
                                                                           ts=self.timestamp))
+        self.pos_desc = {}
+        self.pos_id_list = []
 
     start_urls = [
         'https://lagou.com/'
     ]
 
     def closed(self, spider):
+        """
+        rec_sum = len(self.lines)
+        i = 0
+        while i < rec_sum:
+            self.lines[i].append(self.pos_desc[self.lines[i][0]]['location'])
+            self.lines[i].append(self.pos_desc[self.lines[i][0]]['description'])
+            i += 1
+        """
+
+        # now comes the last page.we can write the self.lines into file.
+        with open(self.file_name, 'wb') as fp:
+            for line in self.lines:
+                _line = '\t'.join(line) + '\n'
+                fp.write(_line.encode('utf-8'))
+        # load the file into mysql.
+        try:
+            conn = mysql.connector.connect(**MYSQL_CONFIG)
+        except Exception as e:
+            print 'can not connect to mysql: %s' % e
+        else:
+            cursor = conn.cursor()
+            # clear the data of the table at first.
+            _sql = """DELETE FROM {tb};"""
+            cursor.execute(_sql.format(tb=TABLE_NAME))
+            conn.commit()
+            # load new data into table.
+            _sql = """LOAD DATA INFILE "{file_name}" REPLACE INTO TABLE `{tb}` CHARACTER SET utf8 FIELDS TERMINATED BY '\t'
+                       LINES TERMINATED BY '\n' (positionId, companyShortName, salaryRange, district, financeStage, experience,
+                       education, createTime, companyId, hrId, keyword, city, salaryLow, salaryHigh,
+                       createTimestamp, positionName);"""
+            print _sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME)
+            print self.file_name
+            cursor.execute(_sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME))
+            conn.commit()
+
+            # set the position description and location.
+            _sql = """UPDATE `{tb}` SET location='{location}', description='{description}' WHERE positionId = {pos_id};"""
+            rec_sum = len(self.lines)
+            i = 0
+            while i < rec_sum:
+                location = self.pos_desc[self.lines[i][0]]['location']
+                description = self.pos_desc[self.lines[i][0]]['description']
+                sql = _sql.format(tb=TABLE_NAME, location=location.encode('utf-8'),
+                                  description=description.encode('utf-8'),
+                                  pos_id=self.lines[i][0])
+                print sql
+                cursor.execute(sql)
+                i += 1
+            conn.commit()
+            cursor.close()
+            conn.close()
         print 'spider closed.'
         self.browser.close()
 
@@ -291,6 +344,7 @@ class LagouSeleniumSpider(scrapy.Spider):
         :return:
         """
         # extract the data that we want.
+        positionName = response.css('div.p_top h3::text').extract()
         salary = response.css('span.money::text').extract()
         company = response.css('div.company_name a::text').extract()
         _financeStage = response.css('div.industry::text').extract()
@@ -319,16 +373,45 @@ class LagouSeleniumSpider(scrapy.Spider):
         _page_not_current = response.css('div.item_con_pager span.pager_not_current::text').extract()
         page_not_current = [i.strip() for i in _page_not_current]
 
+        # transform the time string to timestamp.
+        create_timestamp = []
+        for t in createTime:
+            if t.find(':') != -1:
+                # if time string format is: 08:10.
+                now_date = time.strftime('%Y-%m-%d %H:%M:%S').split()
+                t_str = '{now_date} {time}:00'.format(now_date=now_date[0], time=t)
+                create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
+            elif t.find('-') != -1:
+                # if time string format is: 2018-07-14.
+                t_str = '{now_date} 00:00:00'.format(now_date=t)
+                create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
+            else:
+                day_delta = int(t.rstrip(u'\u5929\u524d'))
+                now_time = datetime.datetime.now() - datetime.timedelta(days=day_delta)
+                create_timestamp.append(int(time.mktime(time.struct_time(now_time.timetuple()))))
+
         # save the extracted data into file or database.
+        #time.sleep(10)
         page_size = len(company)
         i = 0
         while i < page_size:
             #print company[i], salary[i], district[i], financeStage[i], experienceEducation[i]
+            """
             _line = ','.join([positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
                               education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
-                             salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1]]) + '\n'
+                             salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
+                              str(create_timestamp[i]), positionName[i],
+                              self.pos_desc[positionId[i]]['location'],
+                              self.pos_desc[positionId[i]]['description']]) + '\n'
+            """
+            _line = [positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
+                     education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
+                     salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
+                     str(create_timestamp[i]), positionName[i]]
             print _line
-            self.lines.append(_line.encode('utf-8'))
+            #self.lines.append(_line.encode('utf-8'))
+            self.lines.append(_line)
+            self.pos_id_list.append(positionId[i])
             i += 1
 
         # handle next page.
@@ -337,28 +420,25 @@ class LagouSeleniumSpider(scrapy.Spider):
             yield scrapy.Request(url='{url}{pn}'.format(url=self.start_urls[0], pn=str(int(current_page_num)+1)),
                                  callback=self.parse)
         else:
-            # now comes the last page.we can write the self.lines into file.
-            with open(self.file_name, 'wb') as fp:
-                for line in self.lines:
-                    fp.write(line)
-            # load the file into mysql.
-            try:
-                conn = mysql.connector.connect(**MYSQL_CONFIG)
-            except Exception as e:
-                print 'can not connect to mysql: %s' % e
-            else:
-                cursor = conn.cursor()
-                # clear the data of the table at first.
-                _sql = """DELETE FROM {tb};"""
-                cursor.execute(_sql.format(tb=TABLE_NAME))
-                conn.commit()
-                # load new data into table.
-                _sql = """LOAD DATA INFILE "{file_name}" REPLACE INTO TABLE `{tb}` CHARACTER SET utf8 FIELDS TERMINATED BY ','
-                LINES TERMINATED BY '\n' (positionId, companyShortName, salaryRange, district, financeStage, experience, education, createTime, companyId, hrId, keyword, city, salaryLow, salaryHigh);"""
-                print _sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME)
-                print self.file_name
-                cursor.execute(_sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME))
-                conn.commit()
-                cursor.close()
-                conn.close()
+            # get the position description.
+            for p in self.pos_id_list:
+                url = 'https://www.lagou.com/jobs/{p_id}.html'.format(p_id=p)
+                yield scrapy.Request(url=url, callback=self.parse_description)
 
+    def parse_description(self, response):
+        pos_dict = {}
+        positon_id = response.request.url.split('/')[-1].split('.')[0]
+        try:
+            pos_desc_list = response.css('dd.job_bt p::text').extract()
+            pos_dict['description'] = '\r\n'.join(pos_desc_list)
+        except Exception as e:
+            print 'get description failed: ', e
+            pos_dict['description'] = ''
+        try:
+            pos_list = response.css('div.work_addr a::text').extract()[:-1]
+            pos_list.append(response.css('div.work_addr::text').extract()[-2].strip().split()[-1])
+            pos_dict['location'] = '-'.join(pos_list)
+        except Exception as e:
+            print 'get location failed: ', e
+            pos_dict['location'] = ''
+        self.pos_desc[positon_id] = pos_dict
