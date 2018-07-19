@@ -430,7 +430,9 @@ class LagouSeleniumSpider(scrapy.Spider):
         positon_id = response.request.url.split('/')[-1].split('.')[0]
         try:
             pos_desc_list = response.css('dd.job_bt p::text').extract()
-            pos_dict['description'] = '\r\n'.join(pos_desc_list)
+            #pos_dict['description'] = '\r\n'.join(pos_desc_list)
+            # handle the space problem about '\xa0' when the default encoding of terminal is gbk.
+            pos_dict['description'] = ''.join('\r\n'.join(pos_desc_list).split(u'\xa0'))
         except Exception as e:
             print 'get description failed: ', e
             pos_dict['description'] = ''

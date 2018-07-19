@@ -17,6 +17,7 @@ CREATE TABLE `lagou_position` (
   `salaryHigh` int(10) DEFAULT NULL,
   `description` text,
   `location` varchar(255) DEFAULT NULL,
+  `positionName` varchar(255) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `u_positionId` (`positionId`)
-) ENGINE=InnoDB AUTO_INCREMENT=764 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=1781 DEFAULT CHARSET=utf8;
