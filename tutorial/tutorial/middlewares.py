@@ -182,7 +182,7 @@ class SeleniumMiddleware(object):
                     spider.browser.find_element_by_link_text(spider.AREA).click()
                     spider.browser.find_element_by_id('search_input').send_keys(spider.POSITION_KEYWORD)
                     spider.browser.find_element_by_id('search_button').click()
-                    time.sleep(3)
+                    time.sleep(5)
                 except:
                     print 'fail getting the first page.'
                     spider.close()
@@ -208,8 +208,10 @@ class SeleniumMiddleware(object):
                 # Here there is no need for us to handle the next page by finding the css element: pager_next_disabled
                 # because the next page lagic has handled in the main spider,
                 try:
-                    spider.browser.find_element_by_class_name('pager_next ').click()
-                    time.sleep(3)
+                    #spider.browser.find_element_by_class_name('pager_next ').click()
+                    spider.browser.find_element_by_css_selector(
+                        'div.s_position_list div.item_con_pager div.pager_container span.pager_next').click()
+                    time.sleep(5)
                 except:
                     print 'get page {page_number} failed...'.format(page_number=request.url.split('/')[-1])
                     spider.close()

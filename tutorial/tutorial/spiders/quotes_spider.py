@@ -266,13 +266,13 @@ class LagouSeleniumSpider(scrapy.Spider):
 
     def __init__(self):
         self.AREA = u'广州站'
-        self.POSITION_KEYWORD = 'python'
+        self.POSITION_KEYWORD = u'网易游戏'
         self.browser = webdriver.Chrome(SELENIUM_CHROMEDRIVER_PATH)
         self.browser.set_page_load_timeout(30)
         self.lines = []
         self.timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        self.file_name = os.path.join(os.getcwd(), '{kw}_{ts}.txt'.format(kw=self.POSITION_KEYWORD,
-                                                                          ts=self.timestamp))
+        self.file_name = os.path.join(os.getcwd(), u'{kw}_{ts}.txt'.format(kw=self.POSITION_KEYWORD,
+                                                                           ts=self.timestamp)).encode('utf-8')
         self.pos_desc = {}
         self.pos_id_list = []
 
@@ -303,8 +303,8 @@ class LagouSeleniumSpider(scrapy.Spider):
         else:
             cursor = conn.cursor()
             # clear the data of the table at first.
-            _sql = """DELETE FROM {tb};"""
-            cursor.execute(_sql.format(tb=TABLE_NAME))
+            _sql = """DELETE FROM {tb} WHERE keyword='{keyword}';"""
+            cursor.execute(_sql.format(tb=TABLE_NAME, keyword=self.POSITION_KEYWORD.encode('utf-8')))
             conn.commit()
             # load new data into table.
             _sql = """LOAD DATA INFILE "{file_name}" REPLACE INTO TABLE `{tb}` CHARACTER SET utf8 FIELDS TERMINATED BY '\t'
@@ -312,7 +312,6 @@ class LagouSeleniumSpider(scrapy.Spider):
                        education, createTime, companyId, hrId, keyword, city, salaryLow, salaryHigh,
                        createTimestamp, positionName);"""
             print _sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME)
-            print self.file_name
             cursor.execute(_sql.format(file_name=self.file_name.replace('\\', '\\\\'), tb=TABLE_NAME))
             conn.commit()
 
@@ -369,7 +368,7 @@ class LagouSeleniumSpider(scrapy.Spider):
         hrId = response.css('input.target_hr::attr(value)').extract()
         position_total_count = response.css('div.tab-wrapper a.active span::text').extract_first()
         print 'the total count of this position is: ', position_total_count
-        current_page_num = response.css('div.item_con_pager span.pager_is_current::text').extract_first().strip()
+        current_page_num = response.css('div.s_position_list div.item_con_pager span.pager_is_current::text').extract_first().strip()
         _page_not_current = response.css('div.item_con_pager span.pager_not_current::text').extract()
         page_not_current = [i.strip() for i in _page_not_current]
 
@@ -408,12 +407,12 @@ class LagouSeleniumSpider(scrapy.Spider):
                      education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
                      salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
                      str(create_timestamp[i]), positionName[i]]
-            print _line
+            #print _line
             #self.lines.append(_line.encode('utf-8'))
             self.lines.append(_line)
             self.pos_id_list.append(positionId[i])
             i += 1
-
+        print current_page_num
         # handle next page.
         if int(current_page_num) < int(page_not_current[-1]):
             # it is not the last page,just yield the request.
