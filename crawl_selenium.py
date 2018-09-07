@@ -9,7 +9,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 SELENIUM_CHROMEDRIVER_PATH = 'D:\\chromedriver.exe'
 TARGET_URL = 'https://www.lagou.com/'
 AREA = u'广州站'
-POSITION_KEYWORD = u'腾讯'
+POSITION_KEYWORD = u'python'
 HTML_DIR = os.path.join(os.getcwd(), POSITION_KEYWORD)
 if not os.path.exists(HTML_DIR):
     os.mkdir(HTML_DIR)
@@ -28,6 +28,7 @@ def crawl_with_selenium():
     client.find_element_by_id('search_input').send_keys(POSITION_KEYWORD)
     client.find_element_by_id('search_button').click()
     page_number = 10
+    time.sleep(3)
     #print type(client.page_source)
     save_html_files(client, page_number)
 

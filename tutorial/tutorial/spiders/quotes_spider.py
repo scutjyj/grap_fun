@@ -8,6 +8,8 @@ import time
 import datetime
 from selenium import webdriver
 import mysql.connector
+import logging
+from scrapy.utils.log import configure_logging
 
 SELENIUM_CHROMEDRIVER_PATH = 'D:\\chromedriver.exe'
 
@@ -52,6 +54,8 @@ EXPERIENCE = {
     u'\u7ecf\u9a8c10\u5e74\u4ee5\u4e0a': '6'
 
 }
+
+COMPANY_NAMES_SET = [u'网易游戏', u'腾讯']
 
 
 class QuotesSpider(scrapy.Spider):
@@ -264,9 +268,18 @@ class LagouSpider(scrapy.Spider):
 class LagouSeleniumSpider(scrapy.Spider):
     name = 'lagou'
 
+    """
+    configure_logging(install_root_handler=False)
+    logging.basicConfig(
+        filename=os.path.join(os.getcwd(), 'log.txt'),
+        format='%(levelname)s: %(message)s',
+        level=logging.WARNING
+    )
+    """
+
     def __init__(self):
         self.AREA = u'广州站'
-        self.POSITION_KEYWORD = u'网易游戏'
+        self.POSITION_KEYWORD = u'python'
         self.browser = webdriver.Chrome(SELENIUM_CHROMEDRIVER_PATH)
         self.browser.set_page_load_timeout(30)
         self.lines = []
@@ -320,13 +333,22 @@ class LagouSeleniumSpider(scrapy.Spider):
             rec_sum = len(self.lines)
             i = 0
             while i < rec_sum:
-                location = self.pos_desc[self.lines[i][0]]['location']
-                description = self.pos_desc[self.lines[i][0]]['description']
+                try:
+                    location = self.pos_desc[self.lines[i][0]]['location']
+                except Exception as e:
+                    location = str(e)
+                try:
+                    description = self.pos_desc[self.lines[i][0]]['description']
+                except Exception as e:
+                    description = str(e)
                 sql = _sql.format(tb=TABLE_NAME, location=location.encode('utf-8'),
-                                  description=description.encode('utf-8'),
+                                  description=description,
                                   pos_id=self.lines[i][0])
                 print sql
-                cursor.execute(sql)
+                try:
+                    cursor.execute(sql)
+                except Exception as e:
+                    print e
                 i += 1
             conn.commit()
             cursor.close()
@@ -343,98 +365,112 @@ class LagouSeleniumSpider(scrapy.Spider):
         :return:
         """
         # extract the data that we want.
-        positionName = response.css('div.p_top h3::text').extract()
-        salary = response.css('span.money::text').extract()
-        company = response.css('div.company_name a::text').extract()
-        _financeStage = response.css('div.industry::text').extract()
-        financeStage = [FIANANCE_STAGE[i.strip().split('/')[1].strip()] for i in _financeStage]
-        _experienceEducation = response.css('div.p_bot div.li_b_l::text').extract()
-        experience = []
-        education = []
-        for e in _experienceEducation:
-            if e.strip():
-                ee = e.strip().split('/')
-                experience.append(EXPERIENCE[ee[0].strip()])
-                education.append(EDUCATION[ee[1].strip()])
-        district = response.css('span.add em::text').extract()
-        _companyId = response.css('div.company_name a::attr(href)').extract()
-        companyId = [i.split('/')[-1].split('.')[0] for i in _companyId]
-        # the url of the company is like: https://www.lagou.com/gongsi/{companyId}.html
-        print _companyId[0]
-        _positionId = response.css('div.p_top a::attr(href)').extract()
-        positionId = [i.split('/')[-1].split('.')[0] for i in _positionId]
-        _createTime = response.css('span.format-time::text').extract()
-        createTime = [i.strip(u'\u53d1\u5e03') for i in _createTime]
-        hrId = response.css('input.target_hr::attr(value)').extract()
-        position_total_count = response.css('div.tab-wrapper a.active span::text').extract_first()
-        print 'the total count of this position is: ', position_total_count
-        current_page_num = response.css('div.s_position_list div.item_con_pager span.pager_is_current::text').extract_first().strip()
-        _page_not_current = response.css('div.item_con_pager span.pager_not_current::text').extract()
-        page_not_current = [i.strip() for i in _page_not_current]
+        try:
+            positionName = response.css('div.p_top h3::text').extract()
+            salary = response.css('span.money::text').extract()
+            company = response.css('div.company_name a::text').extract()
+            _financeStage = response.css('div.industry::text').extract()
+            try:
+                financeStage = [FIANANCE_STAGE[i.strip().split('/')[1].strip()] if i.split('/')[1].strip() else '-1' for i in _financeStage]
+            except Exception as e:
+                print _financeStage
+                raise
+            _experienceEducation = response.css('div.p_bot div.li_b_l::text').extract()
+            experience = []
+            education = []
+            for e in _experienceEducation:
+                if e.strip():
+                    ee = e.strip().split('/')
+                    experience.append(EXPERIENCE[ee[0].strip()])
+                    education.append(EDUCATION[ee[1].strip()])
+            district = response.css('span.add em::text').extract()
+            _companyId = response.css('div.company_name a::attr(href)').extract()
+            companyId = [i.split('/')[-1].split('.')[0] for i in _companyId]
+            # the url of the company is like: https://www.lagou.com/gongsi/{companyId}.html
+            print _companyId[0]
+            _positionId = response.css('div.p_top a::attr(href)').extract()
+            positionId = [i.split('/')[-1].split('.')[0] for i in _positionId]
+            _createTime = response.css('span.format-time::text').extract()
+            createTime = [i.strip(u'\u53d1\u5e03') for i in _createTime]
+            hrId = response.css('input.target_hr::attr(value)').extract()
+            position_total_count = response.css('div.tab-wrapper a.active span::text').extract_first()
+            print 'the total count of this position is: ', position_total_count
+            current_page_num = response.css('div.s_position_list div.item_con_pager span.pager_is_current::text').extract_first().strip()
+            _page_not_current = response.css('div.item_con_pager span.pager_not_current::text').extract()
+            page_not_current = [i.strip() for i in _page_not_current]
 
-        # transform the time string to timestamp.
-        create_timestamp = []
-        for t in createTime:
-            if t.find(':') != -1:
-                # if time string format is: 08:10.
-                now_date = time.strftime('%Y-%m-%d %H:%M:%S').split()
-                t_str = '{now_date} {time}:00'.format(now_date=now_date[0], time=t)
-                create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
-            elif t.find('-') != -1:
-                # if time string format is: 2018-07-14.
-                t_str = '{now_date} 00:00:00'.format(now_date=t)
-                create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
+            # transform the time string to timestamp.
+            create_timestamp = []
+            for t in createTime:
+                if t.find(':') != -1:
+                    # if time string format is: 08:10.
+                    now_date = time.strftime('%Y-%m-%d %H:%M:%S').split()
+                    t_str = '{now_date} {time}:00'.format(now_date=now_date[0], time=t)
+                    create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
+                elif t.find('-') != -1:
+                    # if time string format is: 2018-07-14.
+                    t_str = '{now_date} 00:00:00'.format(now_date=t)
+                    create_timestamp.append(int(time.mktime(time.strptime(t_str, '%Y-%m-%d %H:%M:%S'))))
+                else:
+                    day_delta = int(t.rstrip(u'\u5929\u524d'))
+                    now_time = datetime.datetime.now() - datetime.timedelta(days=day_delta)
+                    create_timestamp.append(int(time.mktime(time.struct_time(now_time.timetuple()))))
+
+            # save the extracted data into file or database.
+            #time.sleep(10)
+            page_size = len(company)
+            i = 0
+            while i < page_size:
+                #print company[i], salary[i], district[i], financeStage[i], experienceEducation[i]
+                """
+                _line = ','.join([positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
+                                  education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
+                                 salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
+                                  str(create_timestamp[i]), positionName[i],
+                                  self.pos_desc[positionId[i]]['location'],
+                                  self.pos_desc[positionId[i]]['description']]) + '\n'
+                """
+                _line = [positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
+                         education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
+                         salary[i].split('-')[0].strip()[:-1] if '-' in salary[i] else '0',
+                         salary[i].split('-')[1].strip()[:-1] if '-' in salary[i] else '0',
+                         str(create_timestamp[i]), positionName[i]]
+                #print _line
+                #self.lines.append(_line.encode('utf-8'))
+                if self.POSITION_KEYWORD not in COMPANY_NAMES_SET and self.POSITION_KEYWORD.lower() not in _line[-1].lower():
+                    # filter the inrelevant items caused by the fuzzy search mechanism of lagou.
+                    pass
+                else:
+                    self.lines.append(_line)
+                    self.pos_id_list.append(positionId[i])
+                i += 1
+            print current_page_num
+            # handle next page.
+            if int(current_page_num) < int(page_not_current[-1]):
+                # it is not the last page,just yield the request.
+                yield scrapy.Request(url='{url}{pn}'.format(url=self.start_urls[0], pn=str(int(current_page_num)+1)),
+                                     callback=self.parse)
             else:
-                day_delta = int(t.rstrip(u'\u5929\u524d'))
-                now_time = datetime.datetime.now() - datetime.timedelta(days=day_delta)
-                create_timestamp.append(int(time.mktime(time.struct_time(now_time.timetuple()))))
-
-        # save the extracted data into file or database.
-        #time.sleep(10)
-        page_size = len(company)
-        i = 0
-        while i < page_size:
-            #print company[i], salary[i], district[i], financeStage[i], experienceEducation[i]
-            """
-            _line = ','.join([positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
-                              education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
-                             salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
-                              str(create_timestamp[i]), positionName[i],
-                              self.pos_desc[positionId[i]]['location'],
-                              self.pos_desc[positionId[i]]['description']]) + '\n'
-            """
-            _line = [positionId[i], company[i], salary[i], district[i], financeStage[i], experience[i],
-                     education[i], createTime[i], companyId[i], hrId[i], self.POSITION_KEYWORD, 'guangzhou',
-                     salary[i].split('-')[0].strip()[:-1], salary[i].split('-')[1].strip()[:-1],
-                     str(create_timestamp[i]), positionName[i]]
-            #print _line
-            #self.lines.append(_line.encode('utf-8'))
-            self.lines.append(_line)
-            self.pos_id_list.append(positionId[i])
-            i += 1
-        print current_page_num
-        # handle next page.
-        if int(current_page_num) < int(page_not_current[-1]):
-            # it is not the last page,just yield the request.
-            yield scrapy.Request(url='{url}{pn}'.format(url=self.start_urls[0], pn=str(int(current_page_num)+1)),
-                                 callback=self.parse)
-        else:
-            # get the position description.
-            for p in self.pos_id_list:
-                url = 'https://www.lagou.com/jobs/{p_id}.html'.format(p_id=p)
-                yield scrapy.Request(url=url, callback=self.parse_description)
+                # get the position description.
+                for p in self.pos_id_list:
+                    url = 'https://www.lagou.com/jobs/{p_id}.html'.format(p_id=p)
+                    yield scrapy.Request(url=url, callback=self.parse_description)
+        except Exception as e:
+            self.logger.error('something wrong: %s' % e)
+            raise
 
     def parse_description(self, response):
         pos_dict = {}
         positon_id = response.request.url.split('/')[-1].split('.')[0]
         try:
             pos_desc_list = response.css('dd.job_bt p::text').extract()
-            #pos_dict['description'] = '\r\n'.join(pos_desc_list)
+            pos_dict['description'] = u'\r\n'.join(pos_desc_list).encode('utf-8')
             # handle the space problem about '\xa0' when the default encoding of terminal is gbk.
-            pos_dict['description'] = ''.join('\r\n'.join(pos_desc_list).split(u'\xa0'))
+            #pos_dict['description'] = ''.join('\r\n'.join(pos_desc_list).split(u'\xa0'))
         except Exception as e:
             print 'get description failed: ', e
             pos_dict['description'] = ''
+            time.sleep(10)
         try:
             pos_list = response.css('div.work_addr a::text').extract()[:-1]
             pos_list.append(response.css('div.work_addr::text').extract()[-2].strip().split()[-1])
@@ -442,4 +478,5 @@ class LagouSeleniumSpider(scrapy.Spider):
         except Exception as e:
             print 'get location failed: ', e
             pos_dict['location'] = ''
+            time.sleep(10)
         self.pos_desc[positon_id] = pos_dict
